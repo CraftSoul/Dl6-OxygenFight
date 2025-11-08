@@ -204,7 +204,7 @@ jobs:
         retention-days: 30
 
     - name: Create Release
-      if: steps.check-build.outputs.BUILD_FINAL_SUCCESS == 'true' && github.ref_type == 'tag'
+      if: steps.check-build.outputs.BUILD_FINAL_SUCCESS == 'true'
       uses: softprops/action-gh-release@v1
       with:
         files: bin/*.apk
