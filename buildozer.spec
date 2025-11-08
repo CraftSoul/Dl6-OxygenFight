@@ -7,7 +7,7 @@ source.include_exts = py,png,jpg,kv,atlas,ttf
 source.include_patterns = image/*
 version = 12.28
 requirements = python3,kivy==2.2.1,plyer,kivymd,libiconv,libffi
-icon.filename = image/暴风吸入.png
+icon.filename = image/inhalation.png
 presplash.filename = image/title.png
 orientation = portrait
 entrypoint = main.py
