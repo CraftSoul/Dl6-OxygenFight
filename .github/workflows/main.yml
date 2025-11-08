@@ -54,7 +54,7 @@ jobs:
         buildozer --version
         echo "=== 开始构建 APK ==="
         buildozer init || true
-        export GRADLE_OPTS="-Dorg.gradle.java.home=$JAVA_HOME -Dorg.gradle.jvmargs=-Xmx2048m"
+        export GRADLE_OPTS="-Dorg.gradle.java-home=$JAVA_HOME -Dorg.gradle.jvmargs=-Xmx2048m"
         buildozer android debug 2>&1 | tee build.log
         if [ -f bin/*.apk ]; then
           echo "=== 构建成功 ==="
@@ -100,6 +100,11 @@ jobs:
           done
         fi
 
+    - name: Get current date
+      if: success() && github.ref_type == 'tag'
+      id: date
+      run: echo "date=$(date -u +'%Y-%m-%d')" >> $GITHUB_OUTPUT
+
     - name: Upload APK artifact
       if: success()
       uses: actions/upload-artifact@v4
@@ -119,7 +124,7 @@ jobs:
           构建信息:
           - Commit: ${{ github.sha }}
           - 触发事件: ${{ github.event_name }}
-          - 构建时间: ${{ fromJSON('{"date": "'$(date -I)'"}').date }}
+          - 构建时间: ${{ steps.date.outputs.date }}
         draft: false
         prerelease: false
 
