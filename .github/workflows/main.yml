@@ -64,10 +64,12 @@ jobs:
         if [ -f bin/*.apk ]; then
           echo "=== Buildozer 构建成功 ==="
           echo "BUILD_METHOD=buildozer" >> $GITHUB_OUTPUT
+          echo "BUILD_SUCCESS=true" >> $GITHUB_OUTPUT
           cp bin/*.apk buildozer.apk
         else
           echo "=== Buildozer 构建失败，将尝试 p4a ==="
           echo "BUILD_METHOD=failed" >> $GITHUB_OUTPUT
+          echo "BUILD_SUCCESS=false" >> $GITHUB_OUTPUT
           exit 1
         fi
 
@@ -84,6 +86,7 @@ jobs:
     - name: Build APK with p4a (fallback)
       id: p4a-build
       if: steps.buildozer-build.outputs.BUILD_METHOD == 'failed'
+      continue-on-error: true
       run: |
         export PATH="$HOME/.local/bin:$PATH"
         echo "=== 使用 p4a 构建 APK (回退方案) ==="
@@ -118,10 +121,12 @@ jobs:
           mkdir -p bin
           cp dist/dl6_oxygenfight/release/*.apk bin/
           echo "BUILD_METHOD=p4a" >> $GITHUB_OUTPUT
+          echo "BUILD_SUCCESS=true" >> $GITHUB_OUTPUT
         else
           echo "=== p4a 构建失败 ==="
           find . -name "*.apk" -type f | head -10
           echo "BUILD_METHOD=failed" >> $GITHUB_OUTPUT
+          echo "BUILD_SUCCESS=false" >> $GITHUB_OUTPUT
           exit 1
         fi
 
@@ -131,8 +136,19 @@ jobs:
         ANDROID_HOME: /usr/local/lib/android/sdk
         CYTHON_LANGUAGE_LEVEL: "3"
 
+    - name: Check build success
+      id: check-build
+      run: |
+        if [ "${{ steps.buildozer-build.outputs.BUILD_SUCCESS }}" = "true" ] || [ "${{ steps.p4a-build.outputs.BUILD_SUCCESS }}" = "true" ]; then
+          echo "BUILD_FINAL_SUCCESS=true" >> $GITHUB_OUTPUT
+          echo "=== 构建成功 ==="
+        else
+          echo "BUILD_FINAL_SUCCESS=false" >> $GITHUB_OUTPUT
+          echo "=== 所有构建方法都失败了 ==="
+        fi
+
     - name: Collect APK files
-      if: always() && (steps.buildozer-build.outputs.BUILD_METHOD == 'buildozer' || steps.p4a-build.outputs.BUILD_METHOD == 'p4a')
+      if: steps.check-build.outputs.BUILD_FINAL_SUCCESS == 'true'
       run: |
         echo "=== 收集 APK 文件 ==="
         mkdir -p bin
@@ -175,12 +191,12 @@ jobs:
         fi
 
     - name: Get current date
-      if: success() && github.ref_type == 'tag' && (steps.buildozer-build.outputs.BUILD_METHOD == 'buildozer' || steps.p4a-build.outputs.BUILD_METHOD == 'p4a')
+      if: steps.check-build.outputs.BUILD_FINAL_SUCCESS == 'true' && github.ref_type == 'tag'
       id: date
       run: echo "date=$(date -u +'%Y-%m-%d')" >> $GITHUB_OUTPUT
 
     - name: Upload APK artifact
-      if: success() && (steps.buildozer-build.outputs.BUILD_METHOD == 'buildozer' || steps.p4a-build.outputs.BUILD_METHOD == 'p4a')
+      if: steps.check-build.outputs.BUILD_FINAL_SUCCESS == 'true'
       uses: actions/upload-artifact@v4
       with:
         name: kivy-app-apk
@@ -188,7 +204,7 @@ jobs:
         retention-days: 30
 
     - name: Create Release
-      if: success() && github.ref_type == 'tag' && (steps.buildozer-build.outputs.BUILD_METHOD == 'buildozer' || steps.p4a-build.outputs.BUILD_METHOD == 'p4a')
+      if: steps.check-build.outputs.BUILD_FINAL_SUCCESS == 'true' && github.ref_type == 'tag'
       uses: softprops/action-gh-release@v1
       with:
         files: bin/*.apk
