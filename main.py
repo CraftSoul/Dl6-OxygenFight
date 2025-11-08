@@ -13,7 +13,7 @@ from kivy.animation import Animation
 from kivy.resources import resource_add_path
 import random as r
 from data import DATA
-from os.path import exists,join,abspath
+from os.path import exists,join,abspath,dirname
 from os import mkdir
 import sys
 
@@ -22,6 +22,13 @@ if __name__ == '__main__':
 	if hasattr(sys, '_MEIPASS'):
 		resource_add_path(join(sys._MEIPASS))
 	resource_add_path(abspath("."))
+
+def audio_path(filename):
+	if hasattr(sys, '_MEIPASS'):
+		base_path=sys._MEIPASS
+	else:
+		base_path=dirname(abspath(__file__))
+	return join(base_path,'image',filename)
 
 Window.rotation=-90
 Window.allow_screensaver=False
@@ -73,11 +80,11 @@ class app(App):
 		self.air.bind(on_press=self.sob)
 		self.takethat=Button(text='出示',size_hint=(0.11,0.1),pos_hint={'x':0.78,'y':0.2},background_color=(0.5,0.2,0.2),font_name='114')
 		self.amns=Image(source='image/objection.png',pos_hint={'center_x':0.5,'center_y':0.5},size_hint=(0.5,0.5),allow_stretch=True,keep_ratio=True)
-		self.cnm=SoundLoader.load('image/objection.ogg')
+		self.cnm=SoundLoader.load(audio_path('objection.ogg'))
 		self.cnm.bind(on_stop=self.aaa)
 		self.takethat.bind(on_press=self.objection)
 		self.endturn=Button(text='结束回合',size_hint=(0.11,0.1),pos_hint={'x':0.78,'y':0.05},background_color=(0.5,0.2,0.2),font_name='114')
-		self.bgm=SoundLoader.load('image/bgm.ogg')
+		self.bgm=SoundLoader.load(audio_path('bgm.ogg'))
 		self.bgm.loop=True
 		self.bgm.play()
 		self.home=Image(pos_hint={'y':0},size_hint=(1,1.2),source='image/home.png',allow_stretch=True,keep_ratio=True)
