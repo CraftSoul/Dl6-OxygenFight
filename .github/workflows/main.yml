@@ -1,4 +1,4 @@
-name: Build Kivy Android APK with p4a and Release
+name: Build Kivy Android APK and Release
 
 on:
   push:
@@ -35,27 +35,61 @@ jobs:
             curl unzip openjdk-17-jdk
         sudo apt install -y libltdl-dev
 
-    - name: Install Python-for-Android and dependencies
+    - name: Install Buildozer, p4a and dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install cython==0.29.33
-        pip install kivy==2.2.1 plyer kivymd
+        pip install buildozer cython==0.29.33 kivy==2.2.1 plyer kivymd
         pip install python-for-android
 
     - name: Clean previous builds
       run: |
+        rm -rf .buildozer
+        rm -rf ~/.buildozer
         rm -rf bin
         rm -rf .p4a_cache
         rm -rf ~/.p4a_cache
 
-    - name: Build APK with p4a
+    - name: Build APK with Buildozer (primary)
+      id: buildozer-build
+      continue-on-error: true
       run: |
         export PATH="$HOME/.local/bin:$PATH"
-        echo "=== 环境信息 ==="
+        echo "=== 使用 Buildozer 构建 APK ==="
+        java -version
+        python --version
+        buildozer --version
+        buildozer init || true
+        export GRADLE_OPTS="-Dorg.gradle.java-home=$JAVA_HOME -Dorg.gradle.jvmargs=-Xmx2048m"
+        buildozer android debug 2>&1 | tee buildozer.log
+        if [ -f bin/*.apk ]; then
+          echo "=== Buildozer 构建成功 ==="
+          echo "BUILD_METHOD=buildozer" >> $GITHUB_OUTPUT
+          cp bin/*.apk buildozer.apk
+        else
+          echo "=== Buildozer 构建失败，将尝试 p4a ==="
+          echo "BUILD_METHOD=failed" >> $GITHUB_OUTPUT
+          exit 1
+        fi
+
+      env:
+        JAVA_HOME: ${{ env.JAVA_HOME_17_X64 }}
+        ANDROID_SDK_ROOT: /home/runner/android-sdk
+        ANDROID_HOME: /home/runner/android-sdk
+        CYTHON_LANGUAGE_LEVEL: "3"
+        P4A_RELEASE_KEYSTORE: ${{ secrets.P4A_RELEASE_KEYSTORE }}
+        P4A_RELEASE_KEYSTORE_PASSWD: ${{ secrets.P4A_RELEASE_KEYSTORE_PASSWD }}
+        P4A_RELEASE_KEYALIAS_PASSWD: ${{ secrets.P4A_RELEASE_KEYALIAS_PASSWD }}
+        P4A_RELEASE_KEYALIAS: ${{ secrets.P4A_RELEASE_KEYALIAS }}
+
+    - name: Build APK with p4a (fallback)
+      id: p4a-build
+      if: steps.buildozer-build.outputs.BUILD_METHOD == 'failed'
+      run: |
+        export PATH="$HOME/.local/bin:$PATH"
+        echo "=== 使用 p4a 构建 APK (回退方案) ==="
         java -version
         python --version
         p4a --version
-        echo "=== 开始构建 APK ==="
         
         # 创建 p4a 构建命令
         p4a apk --private . \
@@ -77,15 +111,18 @@ jobs:
           --arch=arm64-v8a \
           --arch=armeabi-v7a \
           --release \
-          2>&1 | tee build.log
+          2>&1 | tee p4a.log
 
         if [ -f dist/dl6_oxygenfight/release/*.apk ]; then
-          echo "=== 构建成功 ==="
+          echo "=== p4a 构建成功 ==="
           mkdir -p bin
           cp dist/dl6_oxygenfight/release/*.apk bin/
+          echo "BUILD_METHOD=p4a" >> $GITHUB_OUTPUT
         else
-          echo "=== 构建可能失败，检查日志 ==="
+          echo "=== p4a 构建失败 ==="
           find . -name "*.apk" -type f | head -10
+          echo "BUILD_METHOD=failed" >> $GITHUB_OUTPUT
+          exit 1
         fi
 
       env:
@@ -95,18 +132,24 @@ jobs:
         CYTHON_LANGUAGE_LEVEL: "3"
 
     - name: Collect APK files
-      if: always()
+      if: always() && (steps.buildozer-build.outputs.BUILD_METHOD == 'buildozer' || steps.p4a-build.outputs.BUILD_METHOD == 'p4a')
       run: |
         echo "=== 收集 APK 文件 ==="
         mkdir -p bin
         
-        # 从多个可能的位置查找 APK
-        find . -name "*.apk" -exec cp {} bin/ \; 2>/dev/null || true
+        # 如果 Buildozer 构建成功但文件不在 bin 目录
+        if [ "${{ steps.buildozer-build.outputs.BUILD_METHOD }}" = "buildozer" ] && [ ! -f bin/*.apk ]; then
+          if [ -f buildozer.apk ]; then
+            cp buildozer.apk bin/
+          else
+            find . -name "*.apk" -exec cp {} bin/ \; 2>/dev/null || true
+          fi
+        fi
         
         echo "=== 找到的 APK 文件 ==="
         ls -la bin/ 2>/dev/null || echo "没有找到 APK 文件"
         
-        # 重命名 APK 文件以包含版本信息
+        # 重命名 APK 文件以包含版本信息和构建方法
         if ls bin/*.apk 1> /dev/null 2>&1; then
           for apk in bin/*.apk; do
             # 获取标签名，如果没有标签则使用 commit SHA
@@ -115,38 +158,50 @@ jobs:
             else
               VERSION="$(git rev-parse --short HEAD)"
             fi
-            NEW_NAME="DL6-OxygenFight-${VERSION}.apk"
+            
+            # 根据构建方法添加后缀
+            if [ "${{ steps.buildozer-build.outputs.BUILD_METHOD }}" = "buildozer" ]; then
+              BUILD_SUFFIX="buildozer"
+            elif [ "${{ steps.p4a-build.outputs.BUILD_METHOD }}" = "p4a" ]; then
+              BUILD_SUFFIX="p4a"
+            else
+              BUILD_SUFFIX="unknown"
+            fi
+            
+            NEW_NAME="DL6-OxygenFight-${VERSION}-${BUILD_SUFFIX}.apk"
             mv "$apk" "bin/${NEW_NAME}"
             echo "重命名为: ${NEW_NAME}"
           done
         fi
 
     - name: Get current date
-      if: success() && github.ref_type == 'tag'
+      if: success() && github.ref_type == 'tag' && (steps.buildozer-build.outputs.BUILD_METHOD == 'buildozer' || steps.p4a-build.outputs.BUILD_METHOD == 'p4a')
       id: date
       run: echo "date=$(date -u +'%Y-%m-%d')" >> $GITHUB_OUTPUT
 
     - name: Upload APK artifact
-      if: success()
+      if: success() && (steps.buildozer-build.outputs.BUILD_METHOD == 'buildozer' || steps.p4a-build.outputs.BUILD_METHOD == 'p4a')
       uses: actions/upload-artifact@v4
       with:
-        name: kivy-app-apk-p4a
+        name: kivy-app-apk
         path: bin/*.apk
         retention-days: 30
 
     - name: Create Release
-      if: success() && github.ref_type == 'tag'
+      if: success() && github.ref_type == 'tag' && (steps.buildozer-build.outputs.BUILD_METHOD == 'buildozer' || steps.p4a-build.outputs.BUILD_METHOD == 'p4a')
       uses: softprops/action-gh-release@v1
       with:
         files: bin/*.apk
         body: |
-          Kivy Android APK 自动构建 (使用 p4a)
+          Kivy Android APK 自动构建
           
           构建信息:
           - Commit: ${{ github.sha }}
           - 触发事件: ${{ github.event_name }}
           - 构建时间: ${{ steps.date.outputs.date }}
-          - 构建工具: Python-for-Android
+          - 构建工具: ${{ steps.buildozer-build.outputs.BUILD_METHOD == 'buildozer' && 'Buildozer' || 'Python-for-Android (p4a)' }}
+          
+          ${{ steps.buildozer-build.outputs.BUILD_METHOD == 'failed' && steps.p4a-build.outputs.BUILD_METHOD == 'p4a' && '注: 此版本使用 p4a 作为回退方案构建，因为 Buildozer 构建失败。' || '' }}
         draft: false
         prerelease: false
 
@@ -154,7 +209,9 @@ jobs:
       if: always()
       uses: actions/upload-artifact@v4
       with:
-        name: build-logs-p4a
+        name: build-logs
         path: |
-          build.log
+          buildozer.log
+          p4a.log
+          .buildozer/**/*.log
         retention-days: 7
