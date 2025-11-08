@@ -1,4 +1,4 @@
-name: Build Kivy Android APK and Release
+name: Build Kivy Android APK with p4a and Release
 
 on:
   push:
@@ -32,46 +32,67 @@ jobs:
             python3-pip autoconf automake libtool \
             pkg-config zlib1g-dev libncurses5-dev \
             libncursesw5-dev cmake libffi-dev libssl-dev \
-            curl unzip
+            curl unzip openjdk-17-jdk
         sudo apt install -y libltdl-dev
 
-    - name: Install Buildozer and dependencies
+    - name: Install Python-for-Android and dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install buildozer cython==0.29.33 kivy==2.2.1 plyer kivymd
+        pip install cython==0.29.33
+        pip install kivy==2.2.1 plyer kivymd
+        pip install python-for-android
 
     - name: Clean previous builds
       run: |
-        rm -rf .buildozer
-        rm -rf ~/.buildozer
+        rm -rf bin
+        rm -rf .p4a_cache
+        rm -rf ~/.p4a_cache
 
-    - name: Build APK with detailed logging
+    - name: Build APK with p4a
       run: |
         export PATH="$HOME/.local/bin:$PATH"
         echo "=== 环境信息 ==="
         java -version
         python --version
-        buildozer --version
+        p4a --version
         echo "=== 开始构建 APK ==="
-        buildozer init || true
-        export GRADLE_OPTS="-Dorg.gradle.java-home=$JAVA_HOME -Dorg.gradle.jvmargs=-Xmx2048m"
-        buildozer android debug 2>&1 | tee build.log
-        if [ -f bin/*.apk ]; then
+        
+        # 创建 p4a 构建命令
+        p4a apk --private . \
+          --package=org.test.craft.soul.dl6 \
+          --name="DL6-OxygenFight" \
+          --version=12.28 \
+          --bootstrap=sdl2 \
+          --requirements=python3,kivy==2.2.1,plyer,kivymd \
+          --android-api=33 \
+          --android-min-api=21 \
+          --orientation=portrait \
+          --window \
+          --icon=image/inhalation.png \
+          --presplash=image/title.png \
+          --permission=INTERNET \
+          --permission=WRITE_EXTERNAL_STORAGE \
+          --permission=READ_EXTERNAL_STORAGE \
+          --dist-name=dl6_oxygenfight \
+          --arch=arm64-v8a \
+          --arch=armeabi-v7a \
+          --release \
+          2>&1 | tee build.log
+
+        if [ -f dist/dl6_oxygenfight/release/*.apk ]; then
           echo "=== 构建成功 ==="
+          mkdir -p bin
+          cp dist/dl6_oxygenfight/release/*.apk bin/
         else
           echo "=== 构建可能失败，检查日志 ==="
           find . -name "*.apk" -type f | head -10
         fi
 
       env:
-        JAVA_HOME: ${{ env.JAVA_HOME_17_X64 }}
-        ANDROID_SDK_ROOT: /home/runner/android-sdk
-        ANDROID_HOME: /home/runner/android-sdk
+        JAVA_HOME: /usr/lib/jvm/java-17-openjdk-amd64
+        ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
+        ANDROID_HOME: /usr/local/lib/android/sdk
         CYTHON_LANGUAGE_LEVEL: "3"
-        P4A_RELEASE_KEYSTORE: ${{ secrets.P4A_RELEASE_KEYSTORE }}
-        P4A_RELEASE_KEYSTORE_PASSWD: ${{ secrets.P4A_RELEASE_KEYSTORE_PASSWD }}
-        P4A_RELEASE_KEYALIAS_PASSWD: ${{ secrets.P4A_RELEASE_KEYALIAS_PASSWD }}
-        P4A_RELEASE_KEYALIAS: ${{ secrets.P4A_RELEASE_KEYALIAS }}
 
     - name: Collect APK files
       if: always()
@@ -94,7 +115,7 @@ jobs:
             else
               VERSION="$(git rev-parse --short HEAD)"
             fi
-            NEW_NAME="app-${VERSION}.apk"
+            NEW_NAME="DL6-OxygenFight-${VERSION}.apk"
             mv "$apk" "bin/${NEW_NAME}"
             echo "重命名为: ${NEW_NAME}"
           done
@@ -109,7 +130,7 @@ jobs:
       if: success()
       uses: actions/upload-artifact@v4
       with:
-        name: kivy-app-apk
+        name: kivy-app-apk-p4a
         path: bin/*.apk
         retention-days: 30
 
@@ -119,12 +140,13 @@ jobs:
       with:
         files: bin/*.apk
         body: |
-          Kivy Android APK 自动构建
+          Kivy Android APK 自动构建 (使用 p4a)
           
           构建信息:
           - Commit: ${{ github.sha }}
           - 触发事件: ${{ github.event_name }}
           - 构建时间: ${{ steps.date.outputs.date }}
+          - 构建工具: Python-for-Android
         draft: false
         prerelease: false
 
@@ -132,8 +154,7 @@ jobs:
       if: always()
       uses: actions/upload-artifact@v4
       with:
-        name: build-logs
+        name: build-logs-p4a
         path: |
           build.log
-          .buildozer/**/*.log
         retention-days: 7
