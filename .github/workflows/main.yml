@@ -275,8 +275,6 @@ jobs:
           ${{ steps.buildozer-build.outputs.BUILD_METHOD == 'failed' && '注: 此版本使用备用方案构建。' || '' }}
         draft: false
         prerelease: false
-      env:
-      	GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
     - name: Upload build logs
       if: always()
