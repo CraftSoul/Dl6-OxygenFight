@@ -13,7 +13,7 @@ from kivy.animation import Animation
 from kivy.resources import resource_add_path
 import random as r
 from data import DATA
-from os.path import exists,join,abspath
+from os.path import exists,join,abspath,expanduser
 from os import mkdir
 import sys
 
@@ -120,9 +120,10 @@ class app(App):
 			self.sample.bind(on_touch_down=self.renew)
 	def download(self,i):
 		if self.ending:
-			self.path=join('/storage/emulated/0/Pictures/dl6_save',self.sample.name+'.png')
-			if not exists('/storage/emulated/0/Pictures/dl6_save'):
-				mkdir('/storage/emulated/0/Pictures/dl6_save')
+			path=expanduser('~')
+			self.path=join(path,self.sample.name+'.png')
+			if not exists(path):
+				mkdir(path)
 			self.message.content.text=self.path
 			self.sample.export_to_png(self.path)
 			self.message.open()
