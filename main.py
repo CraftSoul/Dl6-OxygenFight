@@ -13,9 +13,10 @@ from kivy.animation import Animation
 from kivy.resources import resource_add_path
 import random as r
 from data import DATA
-from os.path import exists,join,abspath,expanduser
+from os.path import exists,join,abspath
 from os import mkdir
 import sys
+from android.storage import primary_external_storage_path
 
 
 if __name__ == '__main__':
@@ -120,7 +121,7 @@ class app(App):
 			self.sample.bind(on_touch_down=self.renew)
 	def download(self,i):
 		if self.ending:
-			path=expanduser('~')
+			path=primary_external_storage_path()+'/Pictures/dl6_save'
 			self.path=join(path,self.sample.name+'.png')
 			if not exists(path):
 				mkdir(path)
