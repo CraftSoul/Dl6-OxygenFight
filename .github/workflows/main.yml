@@ -52,7 +52,7 @@ jobs:
         pip install buildozer cython==0.29.33 kivy==2.2.1 plyer kivymd
         pip install python-for-android
 
-    - name: Build APK with Buildozer (优化版本)
+    - name: Build APK with Buildozer
       id: buildozer-build
       continue-on-error: true
       run: |
@@ -74,148 +74,7 @@ jobs:
         export GRADLE_OPTS="-Dorg.gradle.daemon=false -Dorg.gradle.java-home=$JAVA_HOME -Dorg.gradle.jvmargs=-Xmx2048m"
         
         # 构建 APK
-        timeout 1800 buildozer -v android debug 2>&1 | tee buildozer.log
-        
-        if ls bin/*.apk 1> /dev/null 2>&1; then
-          echo "=== Buildozer 构建成功 ==="
-          echo "BUILD_METHOD=buildozer" >> $GITHUB_OUTPUT
-          echo "BUILD_SUCCESS=true" >> $GITHUB_OUTPUT
-        else
-          echo "=== Buildozer 构建失败，将尝试修复方案 ==="
-          echo "BUILD_METHOD=failed" >> $GITHUB_OUTPUT
-          echo "BUILD_SUCCESS=false" >> $GITHUB_OUTPUT
-          exit 1
-        fi
-
-    - name: Build APK with p4a (修复版本)
-      id: p4a-build
-      if: steps.buildozer-build.outputs.BUILD_METHOD == 'failed'
-      continue-on-error: true
-      run: |
-        export PATH="$HOME/.local/bin:$PATH"
-        echo "=== 使用修复的 p4a 构建 APK ==="
-        java -version
-        python --version
-        
-        # 清理之前的构建
-        rm -rf .p4a_cache
-        rm -rf ~/.p4a_cache
-        rm -rf dist
-        
-        # 使用更新的 p4a 分支和配置
-        pip install --upgrade python-for-android
-        
-        # 设置 p4a 配置避免 SDL2 编译错误
-        export P4A_RELEASE_DIR="$(pwd)/dist"
-        export P4A_BUILD_DIR="$(pwd)/.build"
-        
-        # 使用修复的构建命令 - 指定更新的 NDK 和 SDK
-        p4a apk --private . \
-          --package=org.test.craft.soul.dl6 \
-          --name="DL6-OxygenFight" \
-          --version=1.0 \
-          --bootstrap=sdl2 \
-          --requirements=python3,kivy==2.2.1,plyer,kivymd \
-          --android-api=34 \
-          --android-min-api=21 \
-          --orientation=portrait \
-          --window \
-          --icon=image/inhalation.png \
-          --presplash=image/title.png \
-          --permission=INTERNET \
-          --permission=WRITE_EXTERNAL_STORAGE \
-          --permission=READ_EXTERNAL_STORAGE \
-          --dist-name=dl6_oxygenfight \
-          --arch=arm64-v8a \
-          --arch=armeabi-v7a \
-          --ndk-api=21 \
-          --add-source=.
-        
-        if ls dist/dl6_oxygenfight/*.apk 1> /dev/null 2>&1; then
-          echo "=== p4a 构建成功 ==="
-          mkdir -p bin
-          cp dist/dl6_oxygenfight/*.apk bin/
-          echo "BUILD_METHOD=p4a" >> $GITHUB_OUTPUT
-          echo "BUILD_SUCCESS=true" >> $GITHUB_OUTPUT
-        else
-          echo "=== p4a 构建失败，尝试备用方法 ==="
-          # 尝试使用 kivy 官方 bootstrap
-          p4a apk --private . \
-            --package=org.test.craft.soul.dl6 \
-            --name="DL6-OxygenFight" \
-            --version=1.0 \
-            --bootstrap=webview \
-            --requirements=python3,kivy==2.2.1,plyer,kivymd \
-            --android-api=34 \
-            --android-min-api=21 \
-            --orientation=portrait \
-            --permission=INTERNET
-            
-          if ls dist/*.apk 1> /dev/null 2>&1; then
-            echo "=== 备用方法构建成功 ==="
-            mkdir -p bin
-            cp dist/*.apk bin/
-            echo "BUILD_METHOD=p4a_webview" >> $GITHUB_OUTPUT
-            echo "BUILD_SUCCESS=true" >> $GITHUB_OUTPUT
-          else
-            echo "=== 所有 p4a 方法都失败 ==="
-            echo "BUILD_METHOD=failed" >> $GITHUB_OUTPUT
-            echo "BUILD_SUCCESS=false" >> $GITHUB_OUTPUT
-            exit 1
-          fi
-        fi
-
-    - name: Alternative build with fixed dependencies
-      id: alt-build
-      if: steps.p4a-build.outputs.BUILD_METHOD == 'failed'
-      continue-on-error: true
-      run: |
-        echo "=== 使用替代构建方法 ==="
-        
-        # 安装固定版本的依赖
-        pip install --upgrade pip
-        pip install buildozer
-        pip install kivy==2.2.1
-        pip install kivymd
-        pip install plyer
-        
-        # 使用固定版本的 p4a
-        pip install python-for-android==2023.8.17
-        
-        # 简单的直接构建尝试
-        python -m pythonforandroid.toolchain \
-          create \
-          --dist_name=dl6app \
-          --bootstrap=sdl2 \
-          --requirements=python3,kivy,plyer,kivymd \
-          --arch=arm64-v8a \
-          --arch=armeabi-v7a \
-          --android-api=21 \
-          --ndk-version=25b \
-          --debug
-        
-        if [ -f dl6app/dist/dl6app/*.apk ]; then
-          echo "=== 替代方法构建成功 ==="
-          mkdir -p bin
-          cp dl6app/dist/dl6app/*.apk bin/
-          echo "BUILD_METHOD=alt" >> $GITHUB_OUTPUT
-          echo "BUILD_SUCCESS=true" >> $GITHUB_OUTPUT
-        else
-          echo "=== 替代方法构建失败 ==="
-          echo "BUILD_METHOD=failed" >> $GITHUB_OUTPUT
-          echo "BUILD_SUCCESS=false" >> $GITHUB_OUTPUT
-        fi
-
-    - name: Check build success
-      id: check-build
-      run: |
-        if [ "${{ steps.buildozer-build.outputs.BUILD_SUCCESS }}" = "true" ] || [ "${{ steps.p4a-build.outputs.BUILD_SUCCESS }}" = "true" ] || [ "${{ steps.alt-build.outputs.BUILD_SUCCESS }}" = "true" ]; then
-          echo "BUILD_FINAL_SUCCESS=true" >> $GITHUB_OUTPUT
-          echo "=== 构建成功 ==="
-        else
-          echo "BUILD_FINAL_SUCCESS=false" >> $GITHUB_OUTPUT
-          echo "=== 所有构建方法都失败了 ==="
-        fi
+        buildozer -v android debug 2>&1 | tee buildozer.log
 
     - name: Process and rename APK files
       if: steps.check-build.outputs.BUILD_FINAL_SUCCESS == 'true'
@@ -235,8 +94,7 @@ jobs:
               VERSION="$(git rev-parse --short HEAD)"
             fi
             
-            BUILD_METHOD="${{ steps.buildozer-build.outputs.BUILD_METHOD }}${{ steps.p4a-build.outputs.BUILD_METHOD }}${{ steps.alt-build.outputs.BUILD_METHOD }}"
-            NEW_NAME="DL6-OxygenFight-${VERSION}-${BUILD_METHOD}.apk"
+            NEW_NAME="DL6-OxygenFight-${VERSION}.apk"
             mv "$apk" "bin/${NEW_NAME}"
             echo "重命名为: ${NEW_NAME}"
           done
@@ -270,9 +128,6 @@ jobs:
           - Commit: ${{ github.sha }}
           - 触发事件: ${{ github.event_name }}
           - 构建时间: ${{ steps.date.outputs.date }}
-          - 构建工具: ${{ steps.buildozer-build.outputs.BUILD_METHOD == 'buildozer' && 'Buildozer' || steps.p4a-build.outputs.BUILD_METHOD == 'p4a' && 'Python-for-Android (p4a)' || steps.alt-build.outputs.BUILD_METHOD == 'alt' && 'Alternative Method' }}
-          
-          ${{ steps.buildozer-build.outputs.BUILD_METHOD == 'failed' && '注: 此版本使用备用方案构建。' || '' }}
         draft: false
         prerelease: false
 
