@@ -1,4 +1,4 @@
-name: Build Kivy Android APK and Release
+name: Build Kivy Android APK
 
 on:
   push:
@@ -7,14 +7,11 @@ on:
 
 permissions:
   contents: write
-  actions: read
-  checks: read
 
 env:
   ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
   ANDROID_HOME: /usr/local/lib/android/sdk
   JAVA_HOME: /usr/lib/jvm/temurin-17-jdk-amd64
-  CYTHON_LANGUAGE_LEVEL: "3"
 
 jobs:
   build-android:
@@ -39,85 +36,74 @@ jobs:
       run: |
         sudo apt-get update
         sudo apt-get install -y \
-            git zip unzip \
-            python3-pip autoconf automake libtool \
-            pkg-config zlib1g-dev libncurses5-dev \
-            libncursesw5-dev cmake libffi-dev libssl-dev \
-            curl unzip openjdk-17-jdk
-        sudo apt install -y libltdl-dev
+            git zip unzip python3-pip autoconf automake libtool \
+            pkg-config zlib1g-dev libncurses5-dev libncursesw5-dev \
+            cmake libffi-dev libssl-dev curl unzip openjdk-17-jdk libltdl-dev
 
     - name: Install Buildozer and dependencies
       run: |
         python -m pip install --upgrade pip
         pip install buildozer cython==0.29.33 kivy==2.2.1 plyer kivymd
-        pip install python-for-android
 
     - name: Build APK with Buildozer
-      id: buildozer-build
-      continue-on-error: true
+      id: build
       run: |
         export PATH="$HOME/.local/bin:$PATH"
-        echo "=== 使用 Buildozer 构建 APK ==="
-        java -version
-        python --version
-        buildozer --version
+        echo "=== 构建 APK ==="
         
-        # 设置环境变量解决网络问题
+        # 设置环境变量
         export BUILDODER_ALLOW_PLATFORM_EXEC=1
         export USE_COLORS=0
+        export GRADLE_OPTS="-Dorg.gradle.daemon=false -Dorg.gradle.java-home=$JAVA_HOME"
         
-        # 使用更稳定的构建命令
-        buildozer -v android clean 2>&1 | tee clean.log
-        buildozer -v android update 2>&1 | tee update.log
+        # 清理和构建
+        buildozer -v android clean
+        buildozer -v android debug 2>&1 | tee build.log
         
-        # 设置 Gradle 选项
-        export GRADLE_OPTS="-Dorg.gradle.daemon=false -Dorg.gradle.java-home=$JAVA_HOME -Dorg.gradle.jvmargs=-Xmx2048m"
-        
-        # 构建 APK
-        buildozer -v android debug 2>&1 | tee buildozer.log
+        # 检查构建结果
+        if find . -name "*.apk" | grep -q .; then
+          echo "BUILD_SUCCESS=true" >> $GITHUB_OUTPUT
+        else
+          echo "BUILD_SUCCESS=false" >> $GITHUB_OUTPUT
+          echo "=== 构建失败 ==="
+          exit 1
+        fi
 
-    - name: Process and rename APK files
-      if: steps.check-build.outputs.BUILD_FINAL_SUCCESS == 'true'
+    - name: Process APK files
+      if: steps.build.outputs.BUILD_SUCCESS == 'true'
       run: |
         echo "=== 处理 APK 文件 ==="
         mkdir -p bin
         
-        # 确保 APK 文件在 bin 目录
-        find . -name "*.apk" -exec cp {} bin/ \; 2>/dev/null || true
+        # 复制所有 APK 文件到 bin 目录
+        find . -name "*.apk" -exec cp {} bin/ \;
         
         # 重命名 APK 文件
-        if ls bin/*.apk 1> /dev/null 2>&1; then
-          for apk in bin/*.apk; do
-            if [ -n "${{ github.ref_type }}" ] && [ "${{ github.ref_type }}" = "tag" ]; then
-              VERSION="${{ github.ref_name }}"
-            else
-              VERSION="$(git rev-parse --short HEAD)"
-            fi
-            
-            NEW_NAME="DL6-OxygenFight-${VERSION}.apk"
-            mv "$apk" "bin/${NEW_NAME}"
-            echo "重命名为: ${NEW_NAME}"
-          done
-        fi
+        for apk in bin/*.apk; do
+          if [ "${{ github.ref_type }}" = "tag" ]; then
+            VERSION="${{ github.ref_name }}"
+          else
+            VERSION="$(git rev-parse --short HEAD)"
+          fi
+          
+          NEW_NAME="DL6-OxygenFight-${VERSION}.apk"
+          mv "$apk" "bin/${NEW_NAME}"
+          echo "重命名为: ${NEW_NAME}"
+        done
         
-        echo "=== 最终 APK 文件 ==="
-        ls -la bin/ 2>/dev/null || echo "没有找到 APK 文件"
-
-    - name: Get current date
-      if: steps.check-build.outputs.BUILD_FINAL_SUCCESS == 'true'
-      id: date
-      run: echo "date=$(date -u +'%Y-%m-%d')" >> $GITHUB_OUTPUT
+        echo "=== 最终文件 ==="
+        ls -la bin/
 
     - name: Upload APK artifact
-      if: steps.check-build.outputs.BUILD_FINAL_SUCCESS == 'true'
+      if: steps.build.outputs.BUILD_SUCCESS == 'true'
       uses: actions/upload-artifact@v4
       with:
-        name: kivy-app-apk
+        name: android-apk
         path: bin/*.apk
         retention-days: 30
 
     - name: Create Release
-      if: steps.check-build.outputs.BUILD_FINAL_SUCCESS == 'true' && github.ref_type == 'tag'
+      if: steps.build.outputs.BUILD_SUCCESS == 'true' && github.ref_type == 'tag'
       uses: softprops/action-gh-release@v1
       with:
         files: bin/*.apk
@@ -126,8 +112,8 @@ jobs:
           
           构建信息:
           - Commit: ${{ github.sha }}
-          - 触发事件: ${{ github.event_name }}
-          - 构建时间: ${{ steps.date.outputs.date }}
+          - 版本: ${{ github.ref_name }}
+          - 构建时间: $(date -u +'%Y-%m-%d %H:%M:%S')
         draft: false
         prerelease: false
 
@@ -136,9 +122,5 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: build-logs
-        path: |
-          buildozer.log
-          p4a.log
-          clean.log
-          update.log
+        path: build.log
         retention-days: 7
