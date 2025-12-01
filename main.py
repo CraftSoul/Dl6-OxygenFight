@@ -12,6 +12,7 @@ from kivy.core.audio import SoundLoader
 from kivy.animation import Animation
 from kivy.resources import resource_add_path
 import random as r
+from time import time
 from data import DATA
 from os.path import exists,join,abspath
 from os import mkdir
@@ -96,6 +97,7 @@ class app(App):
 			x.bind(on_press=layout.remove_widget)
 		self.ending=1
 		self.history=Label(pos_hint={'x':-0.1,'y':0},font_size='10sp',font_name='114',color=(0,0,0))
+		self.starttime=0
 	def build(self):
 		self.endturn.bind(on_press=sbs[0].endturn)
 		layout.add_widget(self.home)
@@ -170,12 +172,12 @@ class app(App):
 				for o in range(len(sbs[0].cards)):
 					if sbs[0].cards[o]=='大将军长枪' and sbs[0].card[o].skill[-1][1]!=2:
 						sbs[0].card[o].skill[0]=sbs[0].card[o].skill[0][:2]+str(int(sbs[0].card[o].skill[0][2])-2)+sbs[0].card[o].skill[0][3:]
-						sbs[0].card[o].discribe.text=sbs[0].card[o].skill[0]
+						sbs[0].card[o].describe.text=sbs[0].card[o].skill[0]
 						sbs[0].card[o].skill[1]=sbs[0].card[o].skill[1][:13]+sbs[0].card[o].skill[0][2]+sbs[0].card[o].skill[1][14:]
 						sbs[0].card[o].skill[-1]=[sbs[0].card[o].skill[-1][0],sbs[0].card[o].skill[-1][1]-2,sbs[0].card[o].skill[-1][2]]
 			if '抉择' in sbs[0].cards:
 				for o in range(len(sbs[0].cards)):
-					if sbs[0].cards[o]=='抉择':sbs[0].card[o].discribe.text=DATA['抉择'][0]%oxygen
+					if sbs[0].cards[o]=='抉择':sbs[0].card[o].describe.text=DATA['抉择'][0]%oxygen
 			if sbs[0].oxygen<0:
 				sbs[0].hp+=sbs[0].oxygen
 				sbs[0].oxygen=0
@@ -198,7 +200,7 @@ class app(App):
 					for o in range(len(x.card)):
 						if x.cards[o]=='大将军长枪' and x.card[o].skill[-1][1]!=2:
 							x.card[o].skill[0]=x.card[o].skill[0][:2]+str(int(x.card[o].skill[0][2])-2)+x.card[o].skill[0][3:]
-							x.card[o].discribe.text=x.card[o].skill[0]
+							x.card[o].describe.text=x.card[o].skill[0]
 							x.card[o].skill[1]=x.card[o].skill[1][:13]+x.card[o].skill[0][2]+x.card[o].skill[1][14:]
 							x.card[o].skill[-1]=[x.card[o].skill[-1][0],x.card[o].skill[-1][1]-2,x.card[o].skill[-1][2]]
 				if x.oxygen<0:
@@ -230,7 +232,8 @@ class app(App):
 			if self.ending:
 				layout.remove_widget(self.amns)
 				layout.add_widget(self.amns)
-			self.amns.pos_hint={'center_x':0.498+0.004*r.random(),'center_y':0.498+0.004*r.random()}
+			t=max(1-2*(time()-self.starttime)/self.cnm.length,0)
+			self.amns.pos_hint={'center_x':0.495+0.01*r.random()*t,'center_y':0.495+0.01*r.random()*t}
 	def sob(self,i):
 		global holding
 		holding=None
@@ -240,6 +243,7 @@ class app(App):
 		if self.cnm.state!='play' and self.ending:
 			layout.add_widget(self.amns)
 			self.cnm.play()
+			self.starttime=time()
 			if holding:
 				sbs[0].takethat(holding)
 	def aaa(self,i):
@@ -288,13 +292,13 @@ class Card(RelativeLayout):
 			self.line=Line(points=[[0.98,0.48],[0.75,0.46],[0.25,0.46],[0.02,0.48]],color=(1,1,1))
 			self.nt=Label(text=name,font_name='114',pos_hint={'y':-0.04},color=(0,0,0))
 			self.add_widget(self.nt)
-			self.discribe=Label(text=self.skill[0]%oxygen if name=='抉择' else self.skill[0],pos_hint={'y':-0.28},color=(1,1,1),font_name='114')
-			self.add_widget(self.discribe)
+			self.describe=Label(text=self.skill[0]%oxygen if name=='抉择' else self.skill[0],pos_hint={'y':-0.28},color=(1,1,1),font_name='114')
+			self.add_widget(self.describe)
 		self.bind(size=self.u)
 	def u(self,*args):
 		self.rect.size=self.size
 		self.nt.font_size=0.09*self.size_hint[1]*layout.height
-		self.discribe.font_size=0.07*self.size_hint[1]*layout.height
+		self.describe.font_size=0.07*self.size_hint[1]*layout.height
 		self.line.width=width=0.05*self.size_hint[1]*layout.height
 		for x in range(8):
 			if x%2:
