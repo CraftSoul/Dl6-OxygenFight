@@ -482,11 +482,12 @@ class Player:
 					self.combo=0
 	def endturn(self,instance=None):
 		if dl6.ending and self.onturn:
-			if self.is_player and not(self.ttt.parent or self.indicate.parent):
-				layout.remove_widget(dl6.endturn)
-				layout.remove_widget(dl6.takethat)
-				Clock.schedule_once(sbs[self.index+1 if self.index+1<len(sbs) else 0].on_turn,1)
-				self.onturn=0
+			if self.is_player:
+				if not (self.ttt.parent or self.indicate.parent):
+					layout.remove_widget(dl6.endturn)
+					layout.remove_widget(dl6.takethat)
+					Clock.schedule_once(sbs[self.index+1 if self.index+1<len(sbs) else 0].on_turn,1)
+					self.onturn=0
 			else:
 				Clock.schedule_once(sbs[self.index+1 if self.index+1<len(sbs) else 0].on_turn,1)
 				self.onturn=0
