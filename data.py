@@ -6,7 +6,7 @@ DATA={'抑制':('弃1张牌,获得2\n点氧气,1点体力','self.oxygen+=2\nself
 '气瓶':('所有人失去1点\n体力.获得2点氧\n气.补充2点氧气','for o in sbs:\n	o.hp-=1\nself.oxygen+=2\nglobal oxygen\noxygen+=2',[1,0,2.7]),
 '勾玉':('所有人抽1张心灵枷\n锁.被弃时抽1张牌','for o in sbs:o.draw("心灵枷锁")','self.draw()',[1,2,3]),
 '暴风吸入':('消耗1点体力,掠\n夺目标2点氧气','self.hp-=1\nself.objection()','sbs[self.defendant].oxygen-=2\nself.oxygen+=2\nif sbs[self.defendant].oxygen<0:\n	self.oxygen+=sbs[self.defendant].oxygen\n	sbs[self.defendant].oxygen=0',[1,0,4]),
-'小百合':('随机复制1张手牌.\n无手牌先抽1张牌','if not self.cards:self.draw()\no=r.randint(0,len(self.cards)-1)\nself.draw(self.cards[o])\nself.card[-1].skill=self.card[o].skill\nself.card[-1].describe.text=self.card[o].describe.text',[2,2,3]),
+'小百合':('随机复制1张手牌.\n无手牌先抽1张牌','if not self.cards:self.draw()\no=r.randint(0,len(self.cards)-1)\nself.draw(self.cards[o])\nself.card[-1].skill=list(self.card[o].skill)\nself.card[-1].describe.text=self.card[o].describe.text',[2,2,3]),
 '导弹':('消耗2点氧气,从目\n标手牌中抽1张牌','self.oxygen-=2\nself.objection()','if sbs[self.defendant].cards:self.draw(sbs[self.defendant].abandon(r.choice(sbs[self.defendant].card)))',[2,4,3]),
 '葫芦湖水怪':('弃1张牌,其他\n人随机弃1张牌\n或失去2点体力','for o in sbs:\n	if o is self:o.choose()\n	elif len(o.cards):o.abandon(r.choice(o.card))','for o in sbs:\n	if o is self:o.choose()\n	else:o.hp-=2',[1.3,2,3],[0,2,1.7],0),
 '律师徽章':('消耗1点氧气或体力,\n抽2张牌,弃1张牌','self.oxygen-=1\nself.draw()\nself.draw()\nself.choose()','self.hp-=1\nself.draw()\nself.draw()\nself.choose()',[2,3,3],[2,2,4],0),
