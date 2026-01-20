@@ -13,7 +13,7 @@ from kivy.animation import Animation
 from kivy.resources import resource_add_path
 import random as r
 from time import time
-from data import DATA
+from data import *
 from os.path import exists,join,abspath
 from os import mkdir
 import sys
@@ -292,13 +292,14 @@ class Card(RelativeLayout):
 			self.line=Line(points=[[0.98,0.48],[0.75,0.46],[0.25,0.46],[0.02,0.48]],color=(1,1,1))
 			self.nt=Label(text=name,font_name='114',pos_hint={'y':-0.04},color=(0,0,0))
 			self.add_widget(self.nt)
-			self.describe=Label(text=self.skill[0]%oxygen if name=='抉择' else self.skill[0],pos_hint={'y':-0.28},color=(1,1,1),font_name='114')
+			self.describe=Label(text=self.skill[0]%oxygen if name=='抉择' else self.skill[0],pos_hint={'y':-0.28},halign='center',color=(1,1,1),font_name='114')
 			self.add_widget(self.describe)
 		self.bind(size=self.u)
 	def u(self,*args):
 		self.rect.size=self.size
 		self.nt.font_size=0.09*self.size_hint[1]*layout.height
 		self.describe.font_size=0.07*self.size_hint[1]*layout.height
+		self.describe.text_size=(0.6*self.size_hint[1]*layout.height,None)
 		self.line.width=width=0.05*self.size_hint[1]*layout.height
 		for x in range(8):
 			if x%2:
@@ -321,6 +322,10 @@ class Card(RelativeLayout):
 		self.a=Animation(pos_hint={'x':0.13+0.108*index},duration=t,transition='out_quad')
 		self.a.start(self)
 
+class Role(RelativeLayout):
+	def __init__(self,**kwargs):
+		super(Role,self).__init__(**kwargs)
+
 class Player:
 	def __init__(self,name,is_player,x,take,index):
 		self.choice=None
@@ -335,6 +340,9 @@ class Player:
 		self.combo=0
 		self.take=take
 		self.index=index
+		self.abandoned=0
+		self.count=0
+		self.cd=1
 		if is_player:
 			self.ttt=Button(text='确定',pos_hint={'x':0.78,'y':0.2},size_hint=(0.11,0.1),background_color=(0.5,0.2,0.2),font_name='114')
 			self.ttt.bind(on_press=self.eureka)
@@ -417,6 +425,12 @@ class Player:
 					self.abandon(self.choice)
 			else:
 				self.abandon(self.choice)
+			if not self.abandoned:
+				self.abandoned=1
+				for x in sbs:
+					if x.name=='咪酱' and x is not self:
+						history.append('咪酱-自动拾取')
+						x.draw(self.choice.name)
 	def shift(self,instance):
 		if dl6.ending:
 			layout.remove_widget(self.a)
@@ -471,6 +485,8 @@ class Player:
 				layout.add_widget(dl6.endturn)
 				turn+=1
 				layout.add_widget(self.card[-1])
+				for x in sbs:
+					x.abandoned=0
 			self.takethat(self.card[-1])
 			if turn>3:
 				self.oxygen-=1
