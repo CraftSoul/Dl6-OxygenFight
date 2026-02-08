@@ -1,7 +1,7 @@
 [app]
 title = DL6-OxygenFight
-package.name = craft.soul.dl6
-package.domain = org.test
+package.name = dl6
+package.domain = craft.soul
 source.dir = .
 source.include_exts = py,png,jpg,kv,atlas,ttf,ogg
 source.include_patterns = image/*
