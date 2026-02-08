@@ -59,18 +59,11 @@ jobs:
         java -version
         python --version
         buildozer --version
-        
-        # 设置环境变量解决网络问题
         export BUILDODER_ALLOW_PLATFORM_EXEC=1
         export USE_COLORS=0
-        
-        # 使用更稳定的构建命令
         buildozer -v android clean 2>&1 | tee clean.log
         buildozer -v android update 2>&1 | tee update.log
-        
         buildozer -v android debug 2>&1 | tee buildozer.log
-        
-        # 查找所有 APK 文件并复制到 bin 目录
         find . -name "*.apk" -exec cp {} ./ \; 2>/dev/null || true
 
     - name: Check if APK was built
@@ -84,33 +77,6 @@ jobs:
           echo "BUILD_FINAL_SUCCESS=false" >> $GITHUB_OUTPUT
           echo "未找到 APK 文件"
         fi
-
-    - name: Process and rename APK files
-      if: steps.check-build.outputs.BUILD_FINAL_SUCCESS == 'true'
-      run: |
-        echo "=== 处理 APK 文件 ==="
-        mkdir -p bin
-        
-        # 移动所有 APK 文件到 bin 目录
-        for apk in *.apk; do
-          if [ -n "${{ github.ref_type }}" ] && [ "${{ github.ref_type }}" = "tag" ]; then
-            VERSION="${{ github.ref_name }}"
-          else
-            VERSION="$(git rev-parse --short HEAD)"
-          fi
-          
-          # 获取文件扩展名和基本名称
-          filename=$(basename "$apk")
-          extension="${filename##*.}"
-          filename="${filename%.*}"
-          
-          NEW_NAME="DL6-OxygenFight-${VERSION}.${extension}"
-          mv "$apk" "bin/${NEW_NAME}"
-          echo "重命名为: ${NEW_NAME}"
-        done
-        
-        echo "=== 最终 APK 文件 ==="
-        ls -la bin/
 
     - name: Get current date
       if: steps.check-build.outputs.BUILD_FINAL_SUCCESS == 'true'
